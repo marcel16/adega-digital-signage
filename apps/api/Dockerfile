@@ -1,20 +1,10 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine
 RUN apk add --no-cache tini ffmpeg
 WORKDIR /app
-
-FROM base AS deps
 COPY package*.json ./
-RUN npm install --omit=dev && npm cache clean --force
-
-FROM deps AS build
+RUN npm install
 COPY . .
-RUN npm install && npm run build && npm prune --production
-
-FROM base AS production
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/package.json ./
+RUN npm run build
 EXPOSE 4000
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "dist/main"]
