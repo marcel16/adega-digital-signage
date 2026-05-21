@@ -1,21 +1,10 @@
 version: '3.8'
 
-x-common: &common
-  restart: unless-stopped
-  networks:
-    - adega-network
-  logging:
-    driver: "json-file"
-    options:
-      max-size: "10m"
-      max-file: "3"
-
 services:
-  # ===== PostgreSQL =====
   postgres:
-    <<: *common
     image: postgres:16-alpine
     container_name: adega-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-adega_signage}
       POSTGRES_USER: ${POSTGRES_USER:-adega}
@@ -29,12 +18,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - adega-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ===== Redis =====
   redis:
-    <<: *common
     image: redis:7-alpine
     container_name: adega-redis
+    restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-adega_redis_2024}
     volumes:
       - redis_data:/data
@@ -45,14 +40,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - adega-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ===== API - NestJS =====
   api:
-    <<: *common
     build:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: adega-api
+    restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 4000
@@ -71,11 +72,6 @@ services:
       ASAAS_ENV: ${ASAAS_ENV:-sandbox}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       UPLOAD_DIR: /app/storage/uploads
-      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-}
-      STORAGE_BUCKET: ${STORAGE_BUCKET:-adega-midias}
-      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-}
-      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-}
-      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:4000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-60000}
@@ -91,14 +87,20 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - adega-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ===== Worker =====
   worker:
-    <<: *common
     build:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: adega-worker
+    restart: unless-stopped
     command: ["node", "dist/worker.js"]
     environment:
       NODE_ENV: ${NODE_ENV:-production}
@@ -114,14 +116,20 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - adega-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ===== Client Frontend - Next.js =====
   web:
-    <<: *common
     build:
       context: ./apps/web
       dockerfile: Dockerfile
     container_name: adega-web
+    restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:4000}
@@ -133,14 +141,20 @@ services:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
       - api
+    networks:
+      - adega-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ===== Admin Frontend - Next.js =====
   admin:
-    <<: *common
     build:
       context: ./apps/admin
       dockerfile: Dockerfile
     container_name: adega-admin
+    restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:4000}
@@ -152,14 +166,20 @@ services:
       - "${ADMIN_PORT:-3001}:3000"
     depends_on:
       - api
+    networks:
+      - adega-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ===== IPTV Service =====
   iptv:
-    <<: *common
     build:
       context: ./apps/iptv
       dockerfile: Dockerfile
     container_name: adega-iptv
+    restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 4001
@@ -174,14 +194,18 @@ services:
     depends_on:
       - api
       - redis
+    networks:
+      - adega-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
-    driver: local
   redis_data:
-    driver: local
   storage_data:
-    driver: local
 
 networks:
   adega-network:
