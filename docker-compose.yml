@@ -174,34 +174,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  iptv:
-    build:
-      context: ./apps/iptv
-      dockerfile: Dockerfile
-    container_name: adega-iptv
-    restart: unless-stopped
-    environment:
-      NODE_ENV: ${NODE_ENV:-production}
-      PORT: 4001
-      API_URL: ${API_URL:-http://api:4000}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-adega_redis_2024}@redis:6379
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      JWT_SECRET: ${JWT_SECRET}
-      IPTV_SECRET: ${JWT_SECRET}
-      TOKEN_EXPIRATION: 3600
-    ports:
-      - "${IPTV_PORT:-4001}:4001"
-    depends_on:
-      - api
-      - redis
-    networks:
-      - adega-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
 volumes:
   postgres_data:
   redis_data:
