@@ -4,11 +4,11 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 FROM deps AS build
 COPY . .
-RUN npm ci && npm run build
+RUN npm install && npm run build
 
 FROM base AS production
 COPY --from=build /app/node_modules ./node_modules
