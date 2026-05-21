@@ -1,0 +1,791 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public"]
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  OPERATOR
+  VIEWER
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  OVERDUE
+  CANCELED
+  BLOCKED
+}
+
+enum StoreStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum TvStatus {
+  ONLINE
+  OFFLINE
+  PAUSED
+  ERROR
+}
+
+enum MediaType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  URL
+  YOUTUBE
+  HTML
+}
+
+enum MediaStatus {
+  PROCESSING
+  READY
+  ERROR
+}
+
+enum PlaylistType {
+  PRINCIPAL
+  PROMOCIONAL
+  INSTITUCIONAL
+  EMERGENCIA
+  CUSTOM
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELED
+}
+
+enum ScheduleStatus {
+  SCHEDULED
+  PLAYING
+  COMPLETED
+  CANCELED
+}
+
+enum DayOfWeek {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  RECEIVED
+  CANCELED
+  REFUNDED
+  CHARGEBACK
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  CANCELED
+  OVERDUE
+  REFUNDED
+}
+
+enum OverlayType {
+  TEXT
+  IMAGE
+  PRICE
+  QRCODE
+  TIMER
+  COUNTDOWN
+  BADGE
+  STICKER
+  BANNER
+  CLOCK
+  WEATHER
+}
+
+enum OverlayPosition {
+  TOP_LEFT
+  TOP_CENTER
+  TOP_RIGHT
+  MIDDLE_LEFT
+  MIDDLE_CENTER
+  MIDDLE_RIGHT
+  BOTTOM_LEFT
+  BOTTOM_CENTER
+  BOTTOM_RIGHT
+  CUSTOM
+}
+
+enum OverlayAnimation {
+  NONE
+  FADE_IN
+  FADE_OUT
+  SLIDE_LEFT
+  SLIDE_RIGHT
+  SLIDE_UP
+  SLIDE_DOWN
+  BOUNCE
+  ZOOM_IN
+  ZOOM_OUT
+}
+
+enum TokenScope {
+  FULL_ACCESS
+  READ_ONLY
+  STORES
+  TVS
+  MEDIA
+  PLAYLISTS
+  SCHEDULES
+  BILLING
+  IPTV
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+  DEBUG
+}
+
+enum Orientation {
+  HORIZONTAL
+  VERTICAL
+  BOTH
+}
+
+// ==================== MODELS ====================
+
+model Tenant {
+  id                String         @id @default(uuid()) @db.Uuid
+  name              String
+  slug              String         @unique
+  document          String?
+  email             String?
+  phone             String?
+  logoUrl           String?
+  primaryColor      String         @default("#7c3aed")
+  status            TenantStatus   @default(TRIAL)
+  planType          String?
+  trialDays         Int            @default(7)
+  trialStartAt      DateTime?
+  trialEndsAt       DateTime?
+  maxStores         Int            @default(1)
+  maxTvs            Int            @default(1)
+  maxMedia          Int            @default(50)
+  maxStorageMb      Int            @default(500)
+  blockedAt         DateTime?
+  blockedReason     String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  users             User[]
+  stores            Store[]
+  subscriptions     Subscription[]
+  invoices          Invoice[]
+  payments          Payment[]
+  auditLogs         AuditLog[]
+  apiTokens         ApiToken[]
+  webhookLogs       WebhookLog[]
+  systemSettings    SystemSetting[]
+
+  @@map("tenants")
+}
+
+model User {
+  id                String         @id @default(uuid()) @db.Uuid
+  email             String         @unique
+  passwordHash      String
+  name              String
+  avatarUrl         String?
+  role              UserRole       @default(OPERATOR)
+  phone             String?
+  isActive          Boolean        @default(true)
+  twoFactorEnabled  Boolean        @default(false)
+  twoFactorSecret   String?
+  lastLoginAt       DateTime?
+  lastIp            String?
+  refreshToken      String?
+  tenantId          String         @db.Uuid
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stores            UserStore[]
+  auditLogs         AuditLog[]
+  apiTokens         ApiToken[]
+  mediaAssets       MediaAsset[]            @relation("UploadedBy")
+  campaigns         Campaign[]              @relation("CreatedBy")
+  schedules         Schedule[]              @relation("CreatedBy")
+  overlays          Overlay[]               @relation("CreatedBy")
+  webhookLogs       WebhookLog[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+model Store {
+  id                String       @id @default(uuid()) @db.Uuid
+  name              String
+  code              String       @unique
+  document          String?
+  address           String?
+  city              String?
+  state             String?
+  zipCode           String?
+  phone             String?
+  managerName       String?
+  managerPhone      String?
+  latitude          Float?
+  longitude         Float?
+  openingTime       String?
+  closingTime       String?
+  logoUrl           String?
+  primaryColor      String?
+  status            StoreStatus  @default(ACTIVE)
+  blockedAt         DateTime?
+  blockedReason     String?
+  tenantId          String       @db.Uuid
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users             UserStore[]
+  tvs               Tv[]
+  campaigns        Campaign[]
+
+  @@index([tenantId])
+  @@index([code])
+  @@index([status])
+  @@map("stores")
+}
+
+model UserStore {
+  userId            String       @db.Uuid
+  storeId           String       @db.Uuid
+
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store             Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, storeId])
+  @@map("user_stores")
+}
+
+model Tv {
+  id                String       @id @default(uuid()) @db.Uuid
+  name              String
+  pairingCode       String       @unique
+  description       String?
+  model             String?
+  resolution        String?
+  orientation       Orientation  @default(HORIZONTAL)
+  status            TvStatus     @default(OFFLINE)
+  ipAddress         String?
+  lastPingAt        DateTime?
+  volume            Int          @default(50)
+  autoRotate        Boolean      @default(true)
+  rotateInterval    Int          @default(15)
+  token             String       @unique
+  m3uUrl            String?
+  storeId           String       @db.Uuid
+  tenantId          String       @db.Uuid
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  store             Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  schedules         Schedule[]
+  playlistItems     PlaylistItem[]
+
+  @@index([tenantId])
+  @@index([pairingCode])
+  @@index([storeId])
+  @@index([status])
+  @@map("tv_devices")
+}
+
+model MediaAsset {
+  id                String       @id @default(uuid()) @db.Uuid
+  name              String
+  description       String?
+  type              MediaType
+  mimeType          String
+  size              Int
+  duration          Int?
+  width             Int?
+  height            Int?
+  url               String
+  thumbnailUrl      String?
+  youtubeUrl        String?
+  youtubeId         String?
+  hash              String?
+  status            MediaStatus  @default(PROCESSING)
+  tags              String?
+  folder            String?
+  metadata          Json?
+  tenantId          String       @db.Uuid
+  uploadedById      String       @db.Uuid
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploadedBy        User         @relation("UploadedBy", fields: [uploadedById], references: [id])
+  playlistItems     PlaylistItem[]
+  campaignMedia     CampaignMedia[]
+  overlays          Overlay[]
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([status])
+  @@index([folder])
+  @@map("media_assets")
+}
+
+model Campaign {
+  id                String         @id @default(uuid()) @db.Uuid
+  name              String
+  description       String?
+  type              PlaylistType   @default(PROMOCIONAL)
+  status            CampaignStatus @default(DRAFT)
+  startDate         DateTime?
+  endDate           DateTime?
+  priority          Int            @default(0)
+  template          Boolean        @default(false)
+  templateName      String?
+  tenantId          String         @db.Uuid
+  storeId           String?        @db.Uuid
+  createdById       String         @db.Uuid
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store             Store?         @relation(fields: [storeId], references: [id])
+  createdBy         User           @relation("CreatedBy", fields: [createdById], references: [id])
+  media             CampaignMedia[]
+  overlays          Overlay[]
+  schedules         Schedule[]
+  originalCampaign  Campaign?      @relation("CampaignDuplicate")
+  duplicates        Campaign[]     @relation("CampaignDuplicate")
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([storeId])
+  @@map("campaigns")
+}
+
+model CampaignMedia {
+  id                String       @id @default(uuid()) @db.Uuid
+  campaignId        String       @db.Uuid
+  mediaId           String       @db.Uuid
+  order             Int          @default(0)
+  duration          Int?
+  startAt           Int?
+  x                 Float?       @default(0)
+  y                 Float?       @default(0)
+  width             Float?
+  height            Float?
+  scale             Float?       @default(1.0)
+  opacity           Float?       @default(1.0)
+  rotation          Int?         @default(0)
+  createdAt         DateTime     @default(now())
+
+  campaign          Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  media             MediaAsset   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, mediaId, order])
+  @@map("campaign_media")
+}
+
+model Overlay {
+  id                String           @id @default(uuid()) @db.Uuid
+  name              String
+  type              OverlayType
+  content           String?
+  fontFamily        String?          @default("Arial")
+  fontSize          Int?             @default(16)
+  fontColor         String?          @default("#FFFFFF")
+  fontWeight        String?          @default("normal")
+  backgroundColor   String?          @default("transparent")
+  backgroundOpacity Float?           @default(1.0)
+  borderColor       String?
+  borderWidth       Int?             @default(0)
+  borderRadius      Int?             @default(0)
+  padding           Int?             @default(8)
+  positionX         Float            @default(0)
+  positionY         Float            @default(0)
+  positionType      OverlayPosition  @default(BOTTOM_CENTER)
+  width             Int?
+  height            Int?
+  opacity           Float            @default(1.0)
+  animation         OverlayAnimation @default(NONE)
+  animationDuration Int?             @default(500)
+  animationDelay    Int?             @default(0)
+  startAt           Int?             @default(0)
+  endAt             Int?
+  zIndex            Int              @default(1)
+  linkedMediaId     String?          @db.Uuid
+  campaignId        String?          @db.Uuid
+  campaignMediaId   String?          @db.Uuid
+  tenantId          String           @db.Uuid
+  createdById       String           @db.Uuid
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  campaign          Campaign?        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  linkedMedia       MediaAsset?      @relation(fields: [linkedMediaId], references: [id])
+  createdBy         User             @relation("CreatedBy", fields: [createdById], references: [id])
+
+  @@index([tenantId])
+  @@index([campaignId])
+  @@map("overlays")
+}
+
+model Playlist {
+  id                String         @id @default(uuid()) @db.Uuid
+  name              String
+  description       String?
+  type              PlaylistType   @default(CUSTOM)
+  tenantId          String         @db.Uuid
+  createdById       String         @db.Uuid
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy         User           @relation(fields: [createdById], references: [id])
+  items             PlaylistItem[]
+  schedules         Schedule[]
+
+  @@index([tenantId])
+  @@map("playlists")
+}
+
+model PlaylistItem {
+  id                String       @id @default(uuid()) @db.Uuid
+  playlistId        String       @db.Uuid
+  mediaId           String       @db.Uuid
+  order             Int
+  duration          Int?
+  tvId              String?      @db.Uuid
+  createdAt         DateTime     @default(now())
+
+  playlist          Playlist     @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  media             MediaAsset   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  tv                Tv?          @relation(fields: [tvId], references: [id])
+
+  @@unique([playlistId, mediaId, order])
+  @@index([playlistId])
+  @@map("playlist_items")
+}
+
+model Schedule {
+  id                String           @id @default(uuid()) @db.Uuid
+  name              String
+  description       String?
+  daysOfWeek        DayOfWeek[]
+  startTime         String
+  endTime           String?
+  startDate         DateTime
+  endDate           DateTime?
+  status            ScheduleStatus   @default(SCHEDULED)
+  recurring         Boolean          @default(true)
+  priority          Int              @default(0)
+  tvId              String           @db.Uuid
+  campaignId        String?          @db.Uuid
+  playlistId        String?          @db.Uuid
+  tenantId          String           @db.Uuid
+  createdById       String           @db.Uuid
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  tv                Tv               @relation(fields: [tvId], references: [id], onDelete: Cascade)
+  campaign          Campaign?        @relation(fields: [campaignId], references: [id])
+  playlist          Playlist?        @relation(fields: [playlistId], references: [id])
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy         User             @relation("CreatedBy", fields: [createdById], references: [id])
+
+  @@index([tenantId])
+  @@index([tvId])
+  @@index([status])
+  @@map("schedules")
+}
+
+model Subscription {
+  id                String             @id @default(uuid()) @db.Uuid
+  tenantId          String             @unique @db.Uuid
+  asaasId           String?
+  asaasCustomerId   String?
+  planSlug          String
+  planName          String
+  status            SubscriptionStatus @default(TRIAL)
+  price             Decimal            @default(0) @db.Decimal(10,2)
+  cycle             String             @default("monthly")
+  trialStartDate    DateTime?
+  trialEndDate      DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd  DateTime?
+  canceledAt        DateTime?
+  nextBillingAt     DateTime?
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoices          Invoice[]
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id                String        @id @default(uuid()) @db.Uuid
+  subscriptionId    String        @db.Uuid
+  asaasId           String?
+  asaasInvoiceId    String?
+  amount            Decimal       @db.Decimal(10,2)
+  discount          Decimal       @default(0) @db.Decimal(10,2)
+  status            InvoiceStatus @default(PENDING)
+  dueDate           DateTime
+  paidAt            DateTime?
+  paidAmount        Decimal?      @db.Decimal(10,2)
+  paymentMethod     String?
+  boletoUrl         String?
+  boletoBarcode     String?
+  pixQrCode         String?
+  pixCopiaECola     String?
+  creditCardInfo    Json?
+  cycleReference    String?
+  metadata          Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model Payment {
+  id                String         @id @default(uuid()) @db.Uuid
+  tenantId          String         @db.Uuid
+  asaasId           String?
+  asaasPaymentId    String?
+  amount            Decimal        @db.Decimal(10,2)
+  fee               Decimal        @default(0) @db.Decimal(10,2)
+  status            PaymentStatus  @default(PENDING)
+  paymentMethod     String?
+  description       String?
+  metadata          Json?
+  paymentUrl        String?
+  pixCopiaECola     String?
+  boletoUrl         String?
+  boletoCode        String?
+  cardLastDigits    String?
+  paidAt            DateTime?
+  dueDate           DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Plan {
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String   @unique
+  slug              String   @unique
+  description       String?
+  price             Decimal  @db.Decimal(10,2)
+  cycle             String   @default("monthly")
+  maxStores         Int      @default(1)
+  maxTvs            Int      @default(1)
+  maxMedia          Int      @default(50)
+  maxStorageMb      Int      @default(500)
+  features          Json?
+  recommended       Boolean  @default(false)
+  active            Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("plans")
+}
+
+model Coupon {
+  id                String   @id @default(uuid()) @db.Uuid
+  code              String   @unique
+  description       String?
+  discountType      String
+  discountValue     Decimal  @db.Decimal(10,2)
+  maxUses           Int?
+  usedCount         Int      @default(0)
+  minValue          Decimal? @db.Decimal(10,2)
+  maxDiscount       Decimal? @db.Decimal(10,2)
+  validFrom         DateTime?
+  validUntil        DateTime?
+  active            Boolean  @default(true)
+  planSlug          String?
+  firstTimeOnly     Boolean  @default(false)
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("coupons")
+}
+
+model ApiToken {
+  id                String       @id @default(uuid()) @db.Uuid
+  name              String
+  token             String       @unique
+  scope             TokenScope   @default(FULL_ACCESS)
+  lastUsedAt        DateTime?
+  expiresAt         DateTime?
+  isActive          Boolean      @default(true)
+  tenantId          String       @db.Uuid
+  createdById       String       @db.Uuid
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy         User         @relation(fields: [createdById], references: [id])
+
+  @@index([tenantId])
+  @@index([token])
+  @@map("api_tokens")
+}
+
+model SystemSetting {
+  id                String   @id @default(uuid()) @db.Uuid
+  key               String
+  value             String
+  type              String   @default("string")
+  description       String?
+  category          String   @default("general")
+  isEncrypted       Boolean  @default(false)
+  tenantId          String?  @db.Uuid
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant            Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([key, tenantId])
+  @@index([key])
+  @@map("system_settings")
+}
+
+model AsaasConfig {
+  id                String   @id @default(uuid()) @db.Uuid
+  apiKey            String
+  environment       String   @default("sandbox")
+  webhookSecret     String?
+  notifyUrl         String?
+  enabled           Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("asaas_config")
+}
+
+model AuditLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  action            String
+  entity            String?
+  entityId          String?
+  userId            String   @db.Uuid
+  tenantId          String   @db.Uuid
+  metadata          Json?
+  ip                String?
+  userAgent         String?
+  createdAt         DateTime @default(now())
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model WebhookLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  provider          String
+  event             String
+  payload           Json?
+  headers           Json?
+  ip                String?
+  status            Int?
+  response          String?
+  processed         Boolean  @default(false)
+  processedAt       DateTime?
+  error             String?
+  tenantId          String?  @db.Uuid
+  createdAt         DateTime @default(now())
+
+  tenant            Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([provider])
+  @@index([event])
+  @@map("webhook_logs")
+}
+
+model IptvLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  clientCode        String
+  tvCode            String?
+  ip                String
+  userAgent         String?
+  token             String?
+  action            String
+  status            Int
+  duration          Int?
+  createdAt         DateTime @default(now())
+
+  @@index([clientCode])
+  @@index([createdAt])
+  @@index([tvCode])
+  @@map("iptv_logs")
+}
+
+model HealthCheck {
+  id                String   @id @default(uuid()) @db.Uuid
+  service           String
+  status            String
+  responseTimeMs    Int?
+  error             String?
+  metadata          Json?
+  checkedAt         DateTime @default(now())
+
+  @@index([service])
+  @@index([checkedAt])
+  @@map("health_checks")
+}
